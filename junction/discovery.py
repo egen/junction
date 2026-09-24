@@ -15,6 +15,7 @@ docs/wiki/Discovery-Engine.md for the full question reference.
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Optional
@@ -36,6 +37,15 @@ from junction.config_builder import (
 )
 
 console = Console()
+
+# Shared by any question whose text answer becomes part of a generated cloud
+# resource name (domain_name today) — the strictest common subset of AWS/GCP/
+# Azure resource-name rules: lowercase, alphanumeric + hyphen, starts with a
+# letter. Enforced in normalize_answer() and the interactive prompt loop, so a
+# bad value is caught right where it's given — not 20 questions later, deep in
+# terraform_generator.py's own defense-in-depth check on ServiceSpec.
+SLUG_PATTERN = r"[a-z][a-z0-9-]{0,40}"
+SLUG_HINT = "lowercase letters, numbers and hyphens only, starting with a letter (e.g. orders, payments-core)"
 
 
 # ─── Junction Questions (reduce drift by asking at the right time) ────────────
@@ -102,6 +112,8 @@ PHASE_QUESTIONS = {
             "type": "text",
             "default": "platform",
             "examples": "person, health, savings, leaves, payments",
+            "pattern": SLUG_PATTERN,
+            "pattern_hint": f"{SLUG_HINT} — it becomes part of every generated resource name",
             "rationale": "Domain name becomes part of every generated resource name.",
         },
         {
@@ -421,7 +433,11 @@ def normalize_answer(q: dict, value: Any) -> Any:
         raise ValueError(f"{q['id']}: {value!r} is not one of {q['options']}")
     if isinstance(value, list):
         return ",".join(str(v) for v in value)
-    return "" if value is None else str(value)
+    text = "" if value is None else str(value)
+    pattern = q.get("pattern")
+    if pattern and text and not re.fullmatch(pattern, text):
+        raise ValueError(f"{q['id']}: {text!r} is invalid — {q.get('pattern_hint', f'must match {pattern}')}")
+    return text
 
 
 def _default_for(q: dict, answers: Optional[dict[str, Any]] = None) -> Any:
@@ -464,7 +480,12 @@ def _ask_question(q: dict, out: Console, answers: Optional[dict[str, Any]] = Non
             out.print(f"  [red]Pick 1–{len(q['options'])}[/]")
     if q.get("examples"):
         out.print(f"    [dim](e.g., {q['examples']})[/]")
-    return Prompt.ask(f"  {q['question']}", default=default, console=out)
+    pattern = q.get("pattern")
+    while True:
+        answer = Prompt.ask(f"  {q['question']}", default=default, console=out)
+        if not pattern or re.fullmatch(pattern, answer):
+            return answer
+        out.print(f"  [red]{q.get('pattern_hint', f'must match {pattern}')}[/red]")
 
 
 # ─── Answers files ────────────────────────────────────────────────────────────

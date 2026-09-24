@@ -108,6 +108,28 @@ def test_discover_with_agent_fills_gaps_but_flags_win(tmp_path):
     assert answers["cloud"] == "gcp"
 
 
+def test_invalid_domain_flag_fails_clearly_not_a_traceback(tmp_path):
+    """Regression test: an invalid --domain used to sail through discovery
+    unvalidated and crash much later, deep in terraform_generator.py, with a
+    raw traceback. It must now fail fast with a clear message and exit 1."""
+    result = CliRunner().invoke(main, [
+        "--discover", "--defaults", "--domain", "AI data factory (Cloud SQL provisioning)",
+        "--target", str(tmp_path), "--yes",
+    ])
+    assert result.exit_code == 1
+    assert "Invalid answer" in result.output
+    assert "lowercase letters" in result.output
+
+
+def test_services_flag_rejects_non_slug_names():
+    result = CliRunner().invoke(main, [
+        "--discover", "--defaults", "--services", "Order Service, worker",
+        "--target", "/tmp/should-not-be-created", "--yes",
+    ])
+    assert result.exit_code != 0
+    assert "invalid service name" in result.output
+
+
 def test_discover_with_agent_missing_target_fails_clearly(tmp_path):
     result = CliRunner().invoke(main, [
         "--discover-with-agent", "--defaults", "--target", str(tmp_path / "nope"), "--yes",

@@ -31,6 +31,7 @@ Validate a graph file:
 
 from __future__ import annotations
 
+import re
 import sys
 from pathlib import Path
 from typing import Optional
@@ -52,7 +53,7 @@ from junction.config_builder import (
     PlatformConfig,
     interactive_build,
 )
-from junction.discovery import build_platform_config, load_answers, print_implementation_plan, run_discovery
+from junction.discovery import SLUG_PATTERN, SLUG_HINT, build_platform_config, load_answers, print_implementation_plan, run_discovery
 from junction.graph_generator import answers_from_platform, generate_agent_graph
 from junction.graph_schema import AgentGraphValidationError, validate_agent_graph_file
 from junction.models import parse_model_overrides
@@ -372,6 +373,9 @@ def _discovery_build(
         names = [n.strip() for n in services_arg.split(",") if n.strip()]
         if len(names) != len(set(names)):
             raise click.BadParameter(f"duplicate service names: {names}", param_hint="--services")
+        bad = [n for n in names if not re.fullmatch(SLUG_PATTERN, n)]
+        if bad:
+            raise click.BadParameter(f"invalid service name(s) {bad} — {SLUG_HINT}", param_hint="--services")
         prefilled["services"] = [{"name": n} for n in names]
     if config_file:
         base = PlatformConfig.from_yaml(config_file, agent=agent or prefilled.get("agent", "copilot"))
@@ -384,9 +388,13 @@ def _discovery_build(
     if discover_with_agent:
         agent_answer_keys = _run_discover_with_agent(target_dir.resolve(), prefilled)
 
-    result = run_discovery(
-        prefilled=prefilled, use_defaults=use_defaults, out=console, agent_answer_keys=agent_answer_keys,
-    )
+    try:
+        result = run_discovery(
+            prefilled=prefilled, use_defaults=use_defaults, out=console, agent_answer_keys=agent_answer_keys,
+        )
+    except ValueError as exc:
+        console.print(f"[red]Invalid answer:[/red] {exc}")
+        sys.exit(1)
     answers = result.answers
     try:
         graph = generate_agent_graph(answers, models=models)

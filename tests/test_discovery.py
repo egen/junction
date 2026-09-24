@@ -78,6 +78,17 @@ def test_non_question_keys_pass_through():
     assert result.answers["environments"] == envs
 
 
+def test_domain_name_rejects_non_slug_values():
+    """Regression test: an agent (or a person) can type a human sentence
+    instead of a slug. It must be rejected right here, with a clear reason —
+    not 20 questions later as a raw traceback from terraform_generator's
+    ServiceSpec, after the whole run already printed."""
+    by_id = {q["id"]: q for q in all_questions()}
+    with pytest.raises(ValueError, match="lowercase letters"):
+        normalize_answer(by_id["domain_name"], "AI data factory (Cloud SQL database provisioning)")
+    assert normalize_answer(by_id["domain_name"], "payments-core") == "payments-core"
+
+
 def test_normalize_answer():
     by_id = {q["id"]: q for q in all_questions()}
     assert normalize_answer(by_id["jira_required"], "no") is False

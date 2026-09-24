@@ -62,6 +62,24 @@ def test_unknown_and_invalid_fields_are_warned_not_fatal(tmp_path):
     assert any("cloud" in w for w in result.warnings)
 
 
+def test_invalid_domain_name_dropped_with_warning_not_fatal(tmp_path):
+    """Regression test for the crash a verbose agent-proposed domain_name used
+    to cause deep in terraform_generator.py, after the whole discovery run had
+    already printed: normalize_answer's pattern check now catches it here, and
+    propose_answers_with_agent's existing per-field try/except turns that into
+    a warning + drop, exactly like any other invalid field."""
+    def runner(args, cwd, timeout):
+        return _cp(result_text=_yaml_reply(
+            "domain_name: AI data factory (Cloud SQL database provisioning)\ncloud: gcp\n"
+        ))
+
+    result = propose_answers_with_agent(tmp_path, runner=runner)
+
+    assert result.success is True
+    assert result.answers == {"cloud": "gcp"}
+    assert any("domain_name" in w and "lowercase" in w for w in result.warnings)
+
+
 def test_no_yaml_block_in_reply_fails_clearly(tmp_path):
     def runner(args, cwd, timeout):
         return _cp(result_text="I looked around but didn't find much to go on.")

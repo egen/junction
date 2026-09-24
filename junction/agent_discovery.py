@@ -57,7 +57,9 @@ def _prompt() -> str:
     catalog = "\n".join(
         f"- id: {q['id']}\n"
         f"  question: {q['question']}\n"
-        f"  type: {q['type']}" + (f"\n  options: {q['options']!r}" if q.get("options") else "")
+        f"  type: {q['type']}"
+        + (f"\n  options: {q['options']!r}" if q.get("options") else "")
+        + (f"\n  format: {q['pattern_hint']}" if q.get("pattern_hint") else "")
         for q in all_questions()
     )
     return f"""Inspect this repository (read-only — you have no write or execute tools, so
