@@ -15,7 +15,7 @@ import yaml
 from junction.graph_schema import validate_agent_graph
 from junction.models import STRONG_MODEL, resolve_models
 
-DEFAULT_NAMING_PATTERN = "dp-{env}-{domain}-{resource-type}-{purpose}"
+DEFAULT_NAMING_PATTERN = "{domain}-{env}-{resource-type}-{purpose}"
 DEFAULT_ENV_NAMES = "dv,qc,pr"
 
 NODE_ORDER = [
@@ -47,7 +47,7 @@ def env_values(answers: dict[str, Any]) -> list[str]:
 
 
 def naming_pattern(answers: dict[str, Any]) -> str:
-    """Extract the pattern from a naming answer like ``"dp-{env}-... (CPE standard)"``."""
+    """Extract the pattern from a naming answer like ``"{domain}-{env}-... (recommended)"``."""
     raw = str(answers.get("naming_pattern") or DEFAULT_NAMING_PATTERN)
     match = re.match(r"\s*(\S*\{env\}\S*)", raw)
     return match.group(1) if match else DEFAULT_NAMING_PATTERN

@@ -94,7 +94,7 @@ def test_name_prefix_expr_cpe_pattern():
 def test_name_prefix_expr_unrecognized_pattern_falls_back_and_says_so():
     expr, matched = name_prefix_expr("{app}-{env}-{service}")
     assert matched is False
-    assert expr == "dp-${var.environment}-${var.domain}"
+    assert expr == "${var.domain}-${var.environment}"
 
 
 class TestGeneratedTerraform:

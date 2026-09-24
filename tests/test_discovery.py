@@ -10,11 +10,10 @@ from junction.discovery import (
 QUIET = Console(file=io.StringIO())
 
 
-def test_questions_include_platform_and_msk_cluster():
+def test_questions_are_unique_and_start_with_platform():
     ids = [q["id"] for q in all_questions()]
     assert ids[:3] == ["agent", "cloud", "iac_tool"]
-    assert "msk_cluster_shared" in ids
-    assert len(ids) == len(set(ids)) == 24
+    assert len(ids) == len(set(ids)) == 16
 
 
 def test_defaults_run_is_non_interactive():
@@ -25,9 +24,14 @@ def test_defaults_run_is_non_interactive():
     assert len(result.phase_plan) == 7
 
 
-def test_only_if_skips_follow_up():
-    result = run_discovery(prefilled={"has_msk": False}, use_defaults=True, out=QUIET)
-    assert "msk_cluster_shared" not in result.answers
+def test_dead_and_single_cloud_questions_were_dropped():
+    """Regression test: these AWS/ECS-only questions used to be asked but never
+    fed any generator — pure friction. They must not come back."""
+    ids = {q["id"] for q in all_questions()}
+    assert ids.isdisjoint({
+        "env_count", "service_count", "shared_services", "resource_type_tokens",
+        "module_registry", "msk_cluster_shared", "kms_strategy", "nr_license_strategy",
+    })
 
 
 def test_non_question_keys_pass_through():
@@ -39,7 +43,7 @@ def test_non_question_keys_pass_through():
 def test_normalize_answer():
     by_id = {q["id"]: q for q in all_questions()}
     assert normalize_answer(by_id["jira_required"], "no") is False
-    assert normalize_answer(by_id["env_count"], "4") == 4
+    assert normalize_answer({"id": "x", "type": "int"}, "4") == 4
     assert normalize_answer(by_id["agent"], "claude-code") == "claude-code"
     assert normalize_answer(by_id["naming_pattern"], "simple").startswith("{app}")
     with pytest.raises(ValueError):
@@ -65,6 +69,6 @@ def test_example_answers_file_answers_every_question():
     example = Path(__file__).resolve().parent.parent / "examples" / "discovery-answers.example.yml"
     answers = load_answers(example)
     assert {q["id"] for q in all_questions()} <= set(answers)
-    assert answers["naming_pattern"].startswith("dp-{env}")
+    assert answers["naming_pattern"].startswith("{domain}-{env}")
     cfg = build_platform_config(answers)
     assert [e.account_id for e in cfg.environments] == ["111111111111", "222222222222", "333333333333"]

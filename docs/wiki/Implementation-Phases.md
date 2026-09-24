@@ -17,8 +17,8 @@ flowchart LR
 |---|---|---|---|---|---|
 | 0 | **Discovery + Design** | Ask questions, lock naming, confirm the architecture | `platform.yml`, `agent-graph.yml`, `naming-standard.md` | User confirms the design decisions | discovery, naming |
 | 1 | **Scaffold Agent Graph** | Create agents, skills, instructions and knowledge structure | 6 agents, 8 skills, 3 instructions, OKF knowledge dirs | Agent graph config passes schema validation | agent_graph |
-| 2 | **Build Store Layer** | Stateful resources (Aurora, MSK, S3) with KMS | `store-aurora.tf`, `store-msk.tf`, `store-s3.tf` | `terraform validate` passes | data_stores, secrets |
-| 3 | **Build Platform Layer** | ECS cluster, `for_each` services, IAM, ALB, log groups | `platform-ecs*.tf`, `platform-kms.tf`, `platform-vpc.tf` | Module interface validation: modules cloned and outputs checked | — |
+| 2 | **Build Store Layer** | Stateful resources (managed database, streaming, object storage) with encryption at rest | `store-*.tf` (one per selected data store) | `terraform validate` passes | data_stores, secrets |
+| 3 | **Build Platform Layer** | Compute cluster/services (`for_each`, never `count`), IAM, load balancing, log groups | `platform-*.tf` (compute, network, encryption keys) | Module interface validation: modules cloned and outputs checked | — |
 | 4 | **Build Service Layer** | Per-service env vars, secrets, IAM policies | `service-*.tf`, Secrets Manager resources | Env-var parity confirmed against the running V1 (if migrating) | secrets |
 | 5 | **MCP + DevContainer** | Wire MCP servers and a devcontainer for local plan | `.vscode/mcp.json`, `.devcontainer/`, MCP `server.py` files | MCP servers start without errors | — |
 | 6 | **Evals + First Test** | Run evals, then give the graph a real task | `evals.log`, the first service added through the agent graph | Evals PASS, the agent produces valid TF and the IaC Validator approves | — |

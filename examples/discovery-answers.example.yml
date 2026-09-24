@@ -10,15 +10,10 @@ iac_tool: terraform
 # Phase 0 · discovery
 existing_repo: yes            # migrating from V1 → migration-executor has real work
 domain_name: payments
-env_count: 3
-env_names: dv,qc,pr
-service_count: 8
-shared_services: yes          # for_each domain map
+env_names: dv,qc,pr           # number of environments and their risk tiers are derived from this
 
 # Phase 0 · naming (locked before any .tf exists)
-naming_pattern: CPE           # matches "dp-{env}-{domain}-{resource-type}-{purpose} (CPE standard)"
-resource_type_tokens: yes
-module_registry: GitHub       # matches "GitHub private (git::https://...)"
+naming_pattern: recommended   # matches "{domain}-{env}-{resource-type}-{purpose} (recommended)"
 
 # Phase 1 · agent graph
 jira_required: yes
@@ -29,14 +24,11 @@ model_optimization: yes
 # Phase 2 · data stores
 has_rds: yes
 has_msk: yes
-msk_cluster_shared: yes
 has_s3: no
-kms_strategy: Cross-account
 
 # Phase 2/4 · secrets
 secret_strategy: IAM auth
 external_systems: Identity Service API, Card Network Gateway
-nr_license_strategy: Cross-account
 
 # Optional: per-tier model overrides
 models:

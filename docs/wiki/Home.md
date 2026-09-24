@@ -23,7 +23,7 @@ This wiki documents the bootstrap layer of the
 
 ```mermaid
 flowchart LR
-    Q["Discovery<br/>24 junction questions"] --> G["graph_generator<br/>agent-graph.yml"]
+    Q["Discovery<br/>16 junction questions"] --> G["graph_generator<br/>agent-graph.yml"]
     Q --> P["config_builder<br/>platform.yml"]
     G --> S["scaffold + agent adapters"]
     P --> S
@@ -37,7 +37,7 @@ flowchart LR
 |---|---|
 | Specialist agent nodes | **6**: orchestrator, iac-validator, terraform-builder, sre-observer, knowledge-curator, migration-executor |
 | Graph edges | **9** routing and hand-off edges, plus an optional Jira self-gate |
-| Junction questions | **24**, in 6 groups: platform, discovery, naming, data stores, agent graph, secrets |
+| Junction questions | **16**, cloud-agnostic, in 6 groups: platform, discovery, naming, data stores, agent graph, secrets |
 | Implementation phases | **7** (0–6), each ending at a gate |
 | Encoded drift-prevention patterns | **8**, plus 4 anti-patterns found in production |
 | Supported coding agents | **5**: `copilot`, `cursor`, `claude-code`, `continue`, `agnostic`. Each gets all six agents in its native format |

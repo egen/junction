@@ -5,7 +5,7 @@ graph:
   description: IaC coding agent graph — person domain
   domain: person
 naming:
-  pattern: dp-{env}-{domain}-{resource-type}-{purpose}
+  pattern: '{domain}-{env}-{resource-type}-{purpose}'
   env_values:
   - dv
   - qc
@@ -215,6 +215,6 @@ governance:
     terraform:
     - No decorative comment blocks
     - Single var.environment (dv,qc,pr)
-    - 'Naming: dp-{env}-{domain}-{resource-type}-{purpose}'
+    - 'Naming: {domain}-{env}-{resource-type}-{purpose}'
     - 'Modules: pinned refs only'
     - 'Secrets: ignore_changes = [secret_string]'

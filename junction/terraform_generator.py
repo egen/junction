@@ -127,7 +127,7 @@ def name_prefix_expr(naming_pattern: str) -> tuple[str, bool]:
 
     expr = prefix_part.replace("{env}", "${var.environment}").replace("{domain}", "${var.domain}")
     if not matched:
-        expr = "dp-${var.environment}-${var.domain}"
+        expr = "${var.domain}-${var.environment}"
     return expr, matched
 
 
@@ -265,7 +265,7 @@ def _locals_tf(domain: str, prefix_expr: str, prefix_matched: bool, naming_patte
         else (
             f"# NOTE: agent-graph.yml naming pattern ({naming_pattern!r}) does not match the\n"
             f"# expected \"...-{{env}}-{{domain}}-{{resource-type}}-...\" shape, so a default\n"
-            f"# prefix (dp-{{env}}-{{domain}}) was used instead. Review before relying on it."
+            f"# prefix ({{domain}}-{{env}}) was used instead. Review before relying on it."
         )
     )
     return f"""{note}

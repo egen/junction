@@ -19,7 +19,7 @@
 | 2 | 6 graph nodes but 2 agent files | Every adapter renders all six agents (Copilot handoffs, Claude Code subagents, Cursor/Continue rules, `.agents/`), including the migration executor |
 | 3 | Phase 1 outputs didn't match what shipped | 6 agents and 8 skills (new: `knowledge-curation`, `v1-v2-migration`). The phase now says 3 instructions |
 | 4 | No schema validation | JSON Schema v2.0 plus safety invariants, enforced on generate and write, and by `--validate-graph` |
-| 5 | Shared vs dedicated MSK question missing | `msk_cluster_shared`, asked only when `has_msk` is yes |
+| 5 | Shared vs dedicated MSK question missing | Added as `msk_cluster_shared`, then removed again — see #17 below: it never fed a generator, so it was pure friction |
 | 6 | Hard-coded old model names | Tier defaults `claude-opus-5` / `claude-sonnet-5` in `junction/models.py`, overridable with `--model` or answers `models:` |
 | 8 | Escaped em dash in YAML | `allow_unicode=True`, plus no `\u` escapes in agent frontmatter |
 | — | pip install shipped no skills | Framework content is packaged in `junction/framework/` and kept in sync by `scripts/sync_framework.py` and a test |
@@ -29,9 +29,9 @@
 | # | Item | Resolution |
 |---|---|---|
 | 7 | Store/secret answers didn't generate Terraform | `junction/terraform_generator.py` combines `PlatformConfig` + the validated agent graph + discovery answers into real `store-*.tf` / `platform-*.tf` / `service-<name>.tf` files for `cloud: gcp`, wired into `scaffold.py`'s `collect_files()` so every `junction --discover --cloud gcp` run writes them. Services scale up via Terraform's native `for_each` over a `var.services` map — a new `--services api,worker,...` CLI flag lets a user request more than the single default service. Verified end to end through the actual packaged CLI (not just the generator function): built the wheel, installed it fresh, ran `junction --discover --defaults --cloud gcp --domain orders --services api,worker --target <dir> --yes`, and confirmed `infra/service-api.tf` and `infra/service-worker.tf` both exist with independent config in the generated `tfvars/dv.tfvars`. `terraform init`, `fmt -check`, and `validate` all pass with 0 errors on that output; `terraform plan` stops exactly at "could not find default credentials" — the expected boundary once real cloud auth would be needed. 20 unit tests (`tests/test_terraform_generator.py`) additionally check governance rules `validate` can't catch on its own: `allUsers` is gated per-service by `public = true` and appears exactly once, IAM roles are scoped to specific resources (never `roles/editor`/`roles/owner`), Firestore is named (never `(default)`), and secrets use `ignore_changes = [secret_data]`. AWS/Azure are unsupported by design for now — `generate_terraform()` returns `None` (not `{}`) for other clouds, so the gap is visible rather than silently empty. |
-| 9 | AWS/ECS-centric questions | Service-count, MSK and KMS questions assume ECS on AWS | Pick question sets per `compute.type` and cloud adapter |
 | 10 | MCP servers are contracts only | `.vscode/mcp.json` points at `server.py` files that v0.4 will provide | Ship reference servers |
-| 11 | `env_count` isn't cross-checked against `env_names` | `env_names` wins | Warn on mismatch |
+| 11 | `env_count` isn't cross-checked against `env_names` | Removed `env_count` entirely — see #17. Environment count and risk tiers are derived from `env_names` alone, so there's nothing left to cross-check |
+| 17 | Discovery had AWS/ECS-only and unused questions (`env_count`, `service_count`, `shared_services`, `resource_type_tokens`, `module_registry`, `msk_cluster_shared`, `kms_strategy`, `nr_license_strategy`) | Dropped all eight — none of them fed `graph_generator.py` or `terraform_generator.py`, so removing them cost no functionality and cut discovery from 24 questions to 16. `has_rds`/`has_msk`/`has_s3`/`secret_strategy`/`naming_pattern` wording generalized to name the AWS/GCP/Azure equivalent side by side instead of assuming AWS. The `naming_pattern` default and the `name_prefix_expr()` fallback in `terraform_generator.py` no longer hardcode the `dp-` org-specific prefix — see [Discovery Engine](Discovery-Engine.md) |
 
 ## Resolved by the GCP end-to-end test
 
@@ -52,10 +52,10 @@ Reproduce it locally with `./scripts/local-e2e-check.sh -d orders -p <your-gcp-p
 
 | # | Item | Evidence |
 |---|---|---|
-| 9 (detail) | Instructions/skills are AWS-specific static text, not cloud-templated | `compute-patterns.instructions.md` names `aws_iam_role_policy_attachment` and "Secrets Manager resources" verbatim even when `cloud: gcp` |
+| — | Instructions/skills are AWS-specific static text, not cloud-templated | `compute-patterns.instructions.md` names `aws_iam_role_policy_attachment` and "Secrets Manager resources" verbatim even when `cloud: gcp`. Discovery's own questions were generalized (#17); these shipped instruction files weren't |
 | — | No serverless GCP compute option | `COMPUTE_TYPES` has `gke` but not `cloud_run`; the GCP test used GKE Autopilot |
-| — | Naming pattern doesn't account for globally-unique bucket names | GCS (unlike S3) needs a project-id suffix; the CPE pattern alone collides across projects |
-| — | `kms_strategy` and `account_id` are AWS-worded | "cross-account key" / "AWS managed keys" have no GCP equivalent; `account_id` means "project id" on GCP |
+| — | Naming pattern doesn't account for globally-unique bucket names | GCS (unlike S3) needs a project-id suffix; the recommended pattern alone collides across projects |
+| — | `account_id` is AWS-worded | `EnvironmentConfig.account_id` means "project id" on GCP and "subscription id" on Azure; the field name itself still reads AWS-only |
 
 ## Contributing
 

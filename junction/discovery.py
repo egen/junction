@@ -4,13 +4,12 @@ discovery.py — Interactive Discovery Engine for Junction
 Learns about the user's existing infrastructure, asks junction questions to
 prevent drift and repetition, and produces a phased implementation plan.
 
-Inspired by production learnings from scaffolding solution-dp-person:
-- Graph Engineering: 6 specialist agents with zone defense
-- OKF Knowledge: platform-durable facts only (no story state)
-- JIRA Gate: every task must link to a ticket before work begins
-- CPE Naming: dp-{env}-{domain}-{resource-type}-{purpose}
-- Error Decontamination: failed states never carry forward
-- Parallel Research: fan-out/fan-in before acting
+Every question here is cloud- and stack-agnostic and is actually consumed by
+graph_generator.py or terraform_generator.py — see junction/LEARNINGS.py for
+the drift-prevention patterns behind the choices. Questions that don't change
+generated output, or that assume one specific cloud/compute/vendor, don't
+belong here: they add friction without adding value. See
+docs/wiki/Discovery-Engine.md for the full question reference.
 """
 
 from __future__ import annotations
@@ -74,8 +73,7 @@ PHASE_QUESTIONS = {
             "question": "Do you have an existing IaC repo you're migrating FROM?",
             "type": "confirm",
             "default": False,
-            "follow_up": "existing_repo_details",
-            "rationale": "If migrating, we extract env vars, secrets, and naming patterns from V1.",
+            "rationale": "If migrating, the migration-executor agent extracts env vars, secrets, and naming patterns from V1 instead of starting from a blank slate.",
         },
         {
             "id": "domain_name",
@@ -83,112 +81,50 @@ PHASE_QUESTIONS = {
             "type": "text",
             "default": "platform",
             "examples": "person, health, savings, leaves, payments",
-            "rationale": "Domain name becomes part of all resource names: dp-{env}-{domain}-*",
-        },
-        {
-            "id": "env_count",
-            "question": "How many environments do you deploy to?",
-            "type": "int",
-            "default": 3,
-            "rationale": "Determines branch strategy, risk tiers, and promotion chain.",
+            "rationale": "Domain name becomes part of every generated resource name.",
         },
         {
             "id": "env_names",
             "question": "Environment names (comma-separated, lowest→highest risk)?",
             "type": "text",
             "default": "dv,qc,pr",
-            "rationale": "Maps to branches, tfvars files, and AWS profiles.",
-        },
-        {
-            "id": "service_count",
-            "question": "How many ECS services will this repo manage?",
-            "type": "int",
-            "default": 5,
-            "rationale": "Determines if for_each pattern or individual files. >3 = for_each.",
-        },
-        {
-            "id": "shared_services",
-            "question": "Do multiple services share the same Docker image (e.g., MDM entities)?",
-            "type": "confirm",
-            "default": False,
-            "follow_up": "domain_map",
-            "rationale": "If yes, we use for_each domain map pattern (8 services → 1 file).",
+            "rationale": "Maps to branches, tfvars files, and cloud accounts/projects. The number of environments, their branches, and their risk tiers (LOW→HIGH) are all derived from this one list — nothing else to keep in sync.",
         },
     ],
     "naming": [
         {
             "id": "naming_pattern",
-            "question": "What naming standard does your org use for AWS resources?",
+            "question": "What naming standard should generated resource names follow?",
             "type": "choice",
             "options": [
-                "dp-{env}-{domain}-{resource-type}-{purpose} (CPE standard)",
+                "{domain}-{env}-{resource-type}-{purpose} (recommended)",
                 "{app}-{env}-{service} (simple)",
                 "Custom (I'll provide the pattern)",
             ],
-            "rationale": "Naming is enforced by IaC Validator agent. Must be decided upfront.",
-        },
-        {
-            "id": "resource_type_tokens",
-            "question": "Do resource names include AWS service type (ecs, rds, msk, lambda)?",
-            "type": "confirm",
-            "default": True,
-            "rationale": "CPE standard requires it. Affects locals.tf prefix definitions.",
-        },
-        {
-            "id": "module_registry",
-            "question": "Where are your Terraform modules hosted?",
-            "type": "choice",
-            "options": [
-                "CodeCommit (git::codecommit://module-aws-*?ref=vN)",
-                "Terraform Registry (hashicorp/aws)",
-                "GitHub private (git::https://github.com/org/module?ref=vN)",
-                "Local modules (./modules/*)",
-            ],
-            "rationale": "Module source pattern enforced across all .tf files.",
+            "rationale": "The IaC Validator agent enforces this pattern on every resource, so it has to be decided before any file is generated. Works the same regardless of cloud or IaC tool.",
         },
     ],
     "data_stores": [
         {
             "id": "has_rds",
-            "question": "Does this domain use RDS/Aurora PostgreSQL?",
+            "question": "Does this domain need a managed relational database (e.g. RDS/Aurora, Cloud SQL, Azure Database)?",
             "type": "confirm",
             "default": True,
-            "follow_up": "rds_details",
-            "rationale": "If yes, generates store-aurora.tf with IAM auth + SG rules.",
+            "rationale": "If yes, generates the store-layer file for a managed relational database, with IAM/identity-based auth and network rules.",
         },
         {
             "id": "has_msk",
-            "question": "Does this domain use MSK/Kafka for streaming?",
+            "question": "Does this domain need a streaming/event backbone (e.g. Kafka/MSK, Pub/Sub, Event Hubs)?",
             "type": "confirm",
             "default": True,
-            "follow_up": "msk_details",
-            "rationale": "If yes, generates store-msk.tf with topics, IAM, SG rules.",
-        },
-        {
-            "id": "msk_cluster_shared",
-            "question": "Are the MSK topics on a shared cluster (vs a dedicated one)?",
-            "type": "confirm",
-            "default": True,
-            "only_if": "has_msk",
-            "rationale": "Shared clusters need a domain topic prefix and cross-account IAM; dedicated ones own the cluster.",
+            "rationale": "If yes, generates the store-layer file for topics/subscriptions, IAM, and network rules.",
         },
         {
             "id": "has_s3",
-            "question": "Does this domain use S3 for data storage?",
+            "question": "Does this domain need object storage (e.g. S3, GCS, Blob Storage)?",
             "type": "confirm",
             "default": True,
-            "rationale": "If yes, generates store-s3.tf with KMS + lifecycle.",
-        },
-        {
-            "id": "kms_strategy",
-            "question": "KMS encryption strategy?",
-            "type": "choice",
-            "options": [
-                "Cross-account key (central KMS account, per-env keys)",
-                "Same-account key (one per env within workload account)",
-                "AWS managed keys (no custom KMS)",
-            ],
-            "rationale": "Cross-account needs key policy with service principals.",
+            "rationale": "If yes, generates the store-layer file with encryption and lifecycle rules.",
         },
     ],
     "agent_graph": [
@@ -229,28 +165,17 @@ PHASE_QUESTIONS = {
             "options": [
                 "IAM auth (no passwords, token-based)",
                 "Secrets Manager (JSON bundle per service)",
-                "Both (IAM where possible, SM for external systems)",
+                "Both (IAM where possible, secrets manager for external systems)",
             ],
-            "rationale": "IAM auth = zero secrets for internal services. SM = external deps.",
+            "rationale": "IAM/managed-identity auth means zero stored secrets for internal services; a secrets manager is kept for external dependencies that need one.",
         },
         {
             "id": "external_systems",
             "question": "List external systems that need credentials (comma-separated)?",
             "type": "text",
             "default": "",
-            "examples": "UDP Kafka, Identity Service API, AAAS API",
-            "rationale": "Each external system = one SM secret bundle with ignore_changes.",
-        },
-        {
-            "id": "nr_license_strategy",
-            "question": "How is New Relic license key provided?",
-            "type": "choice",
-            "options": [
-                "Cross-account SM ARN (shared ECR account secret)",
-                "Per-env SM secret (managed in this repo)",
-                "Not using New Relic",
-            ],
-            "rationale": "Cross-account = hardcoded ARN. Per-env = variable.",
+            "examples": "payment gateway, identity service API, partner API",
+            "rationale": "Each external system gets exactly one secret bundle with ignore_changes, so nothing else silently accumulates secrets.",
         },
     ],
 }
@@ -278,16 +203,16 @@ IMPLEMENTATION_PHASES = [
     {
         "phase": 2,
         "name": "Build Store Layer",
-        "description": "Stateful resources (Aurora, MSK, S3) with KMS",
-        "outputs": ["store-aurora.tf", "store-msk.tf", "store-s3.tf"],
+        "description": "Stateful resources (managed database, streaming, object storage) with encryption at rest",
+        "outputs": ["store-*.tf (one per selected data store)"],
         "gate": "terraform validate passes",
         "junction_questions": ["data_stores", "secrets"],
     },
     {
         "phase": 3,
         "name": "Build Platform Layer",
-        "description": "ECS cluster, services for_each, IAM, ALB, log groups",
-        "outputs": ["platform-ecs*.tf", "platform-kms.tf", "platform-vpc.tf"],
+        "description": "Compute cluster/services (for_each, never count), IAM, load balancing, log groups",
+        "outputs": ["platform-*.tf (compute, network, encryption keys)"],
         "gate": "Module interface validation (clone modules, check outputs)",
         "junction_questions": [],
     },

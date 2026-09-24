@@ -58,7 +58,7 @@ This installs the `junction` command (the PyPI distribution is named `junction-s
 ## Quickstart
 
 ```bash
-# End-to-end, interactive: 24 junction questions, phase by phase
+# End-to-end, interactive: 16 junction questions, phase by phase
 junction --discover --target ./my-infra-repo
 
 # End-to-end, no prompts (CI or a demo): defaults for everything not preset
@@ -111,7 +111,6 @@ domain_name: payments
 env_names: dev,staging,prod
 jira_required: yes
 has_msk: yes
-msk_cluster_shared: no
 models:
   validator: claude-haiku-4-5
 environments:            # optional: overrides env_names with real accounts

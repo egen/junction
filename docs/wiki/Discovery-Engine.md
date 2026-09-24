@@ -29,7 +29,14 @@ result.answers                     # dict of question id → answer
 
 Question types: `confirm` (yes/no), `int`, `choice` (numbered options) and `text` (with examples).
 
-## The 24 junction questions
+## The 16 junction questions
+
+Every question below is actually consumed by `graph_generator.py` or `terraform_generator.py` —
+nothing here just decorates the run. Earlier versions asked 8 more (environment *count* alongside
+environment *names*, an ECS-specific service count, a Docker-image-sharing question, AWS-only
+naming/module-registry questions, a shared-vs-dedicated MSK follow-up, a KMS strategy question, and
+a New-Relic-only license question) that never fed any generator and only made sense on one cloud.
+They were dropped: fewer questions, faster to adopt, no single-cloud assumptions baked in.
 
 ### Phase 0 · `platform`: which toolchain?
 
@@ -44,19 +51,14 @@ Question types: `confirm` (yes/no), `int`, `choice` (numbered options) and `text
 | Id | Question | Why it matters |
 |---|---|---|
 | `existing_repo` | Do you have an existing IaC repo you're migrating FROM? | If migrating, env vars, secrets and naming patterns are extracted from V1. |
-| `domain_name` | What business domain does this repo serve? (e.g. person, health, payments) | Becomes part of every resource name: `dp-{env}-{domain}-*`. |
-| `env_count` | How many environments do you deploy to? (default 3) | Drives branch strategy, risk tiers and the promotion chain. |
-| `env_names` | Environment names, lowest → highest risk (default `dv,qc,pr`) | Maps to branches, tfvars files and cloud profiles. |
-| `service_count` | How many ECS services will this repo manage? (default 5) | More than 3 means the `for_each` pattern instead of individual files. |
-| `shared_services` | Do multiple services share one Docker image? | If yes, a `for_each` domain map (for example 8 services in 1 file). |
+| `domain_name` | What business domain does this repo serve? (e.g. person, health, payments) | Becomes part of every generated resource name. |
+| `env_names` | Environment names, lowest → highest risk (default `dv,qc,pr`) | Maps to branches, tfvars files and cloud accounts/projects. Environment *count* and risk tiers (LOW→HIGH) are both derived from this one list — there's no separate count to keep in sync. |
 
-### Phase 0 · `naming`: lock it before any `.tf` exists
+### Phase 0 · `naming`: lock it before any IaC file exists
 
 | Id | Question | Why it matters |
 |---|---|---|
-| `naming_pattern` | Which naming standard does your org use? (CPE `dp-{env}-{domain}-{resource-type}-{purpose}` / simple `{app}-{env}-{service}` / custom) | The IaC Validator enforces it, so it has to be decided up front. |
-| `resource_type_tokens` | Do resource names include the AWS service type (ecs, rds, msk, lambda)? | Required by the CPE standard, and it affects the `locals.tf` prefixes. |
-| `module_registry` | Where are Terraform modules hosted? (CodeCommit / Terraform Registry / GitHub private / local) | The module source pattern is enforced across all `.tf` files. |
+| `naming_pattern` | What naming standard should generated resource names follow? (`{domain}-{env}-{resource-type}-{purpose}` recommended / simple `{app}-{env}-{service}` / custom) | The IaC Validator enforces it, so it has to be decided up front. Cloud-agnostic — no assumed provider or resource-type vocabulary. |
 
 ### Phase 1 · `agent_graph`: how autonomous is the org?
 
@@ -71,37 +73,30 @@ Question types: `confirm` (yes/no), `int`, `choice` (numbered options) and `text
 
 | Id | Question | What it generates |
 |---|---|---|
-| `has_rds` | Does this domain use RDS/Aurora PostgreSQL? | `store-aurora.tf` with IAM auth + SG rules. |
-| `has_msk` | Does this domain use MSK/Kafka? | `store-msk.tf` with topics, IAM and SG rules. |
-| `msk_cluster_shared` | Are the MSK topics on a shared cluster? *(asked only if `has_msk`)* | Shared clusters need a topic prefix and cross-account IAM. |
-| `has_s3` | Does this domain use S3? | `store-s3.tf` with KMS + lifecycle. |
-| `kms_strategy` | KMS strategy? (cross-account / same-account / AWS-managed) | A cross-account key needs a key policy with service principals. |
+| `has_rds` | Does this domain need a managed relational database (RDS/Aurora, Cloud SQL, Azure Database)? | A store-layer file with identity-based auth and network rules. |
+| `has_msk` | Does this domain need a streaming/event backbone (MSK/Kafka, Pub/Sub, Event Hubs)? | A store-layer file with topics/subscriptions, IAM and network rules. |
+| `has_s3` | Does this domain need object storage (S3, GCS, Blob Storage)? | A store-layer file with encryption and lifecycle rules. |
+
+Today `terraform_generator.py` only implements the GCP shape of these three (Firestore/Pub-Sub/GCS
++ Secret Manager) — see [Roadmap and Open Items](Roadmap-and-Open-Items.md). The questions
+themselves aren't AWS- or GCP-specific; the generator catching up on AWS/Azure is the open item.
 
 ### Phases 2 and 4 · `secrets`: credentials, only where needed
 
 | Id | Question | Why it matters |
 |---|---|---|
-| `secret_strategy` | How do services get DB credentials? (IAM auth / Secrets Manager / both) | IAM auth means no stored secrets for internal services, and SM is kept for external dependencies. |
-| `external_systems` | Which external systems need credentials? | Each one gets exactly one SM secret bundle with `ignore_changes`. |
-| `nr_license_strategy` | How is the New Relic license key provided? | A cross-account secret uses a hard-coded ARN, and a per-env secret uses a variable. |
+| `secret_strategy` | How do services get DB credentials? (identity-based auth / secrets manager / both) | Identity-based auth means no stored secrets for internal services, and a secrets manager is kept for external dependencies. |
+| `external_systems` | Which external systems need credentials? | Each one gets exactly one secret bundle with `ignore_changes`. |
 
-## The seven questions that prevent most rework
+## The questions that prevent most rework
 
-`LEARNINGS.py` names seven questions that, from production experience, eliminate about **80% of post-scaffold fixes**:
-
-1. Is there an existing repo you're migrating from? *(triggers env-var extraction)*
-2. Do multiple services share one Docker image? *(triggers the domain-map pattern)*
-3. Do services authenticate to the DB with IAM or a password? *(avoids Secrets Manager bloat)*
-4. Are MSK topics on a shared or a dedicated cluster? *(sets the topic prefix)*
-5. Must every task link to a Jira ticket? *(sets the orchestrator's gate)*
-6. Which naming standard does your org enforce? *(must be locked before ANY `.tf` file)*
-7. Which external systems need credentials? *(only those get SM secrets)*
-
-All seven are asked. Question 4 is `msk_cluster_shared`, a follow-up that is asked only when `has_msk` is yes.
+`LEARNINGS.py` names the junction questions that, from production experience, eliminate most
+post-scaffold fixes — see `HIGH_VALUE_JUNCTION_QUESTIONS` there. All of them are asked above; none
+require a specific cloud, compute type, or observability vendor to be useful.
 
 ## Answers files and replay
 
-Every discovery run writes `.github/config/discovery-answers.yml` into the target. Pass it back with `--answers` to reproduce the same graph, for example in CI or for another coding agent (`--agent` overrides the saved value). Values are type-checked: `yes`/`no` for confirms, integers, and a unique prefix or substring of a choice (`naming_pattern: CPE`). A bad value stops the run with a clear error. See [`examples/discovery-answers.example.yml`](../../examples/discovery-answers.example.yml).
+Every discovery run writes `.github/config/discovery-answers.yml` into the target. Pass it back with `--answers` to reproduce the same graph, for example in CI or for another coding agent (`--agent` overrides the saved value). Values are type-checked: `yes`/`no` for confirms, integers, and a unique prefix or substring of a choice (`naming_pattern: recommended`). A bad value stops the run with a clear error. See [`examples/discovery-answers.example.yml`](../../examples/discovery-answers.example.yml).
 
 ## Relationship to the setup wizard
 

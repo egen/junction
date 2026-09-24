@@ -37,7 +37,7 @@ flowchart TB
 
 | Module | Responsibility | Key API |
 |---|---|---|
-| `junction/discovery.py` | Discovery: 24 junction questions in 6 groups, 7 gated phases, answers files, answers → platform | `run_discovery(prefilled, use_defaults)`, `load_answers()`, `build_platform_config()`, `print_implementation_plan()` |
+| `junction/discovery.py` | Discovery: 16 cloud-agnostic junction questions in 6 groups, 7 gated phases, answers files, answers → platform | `run_discovery(prefilled, use_defaults)`, `load_answers()`, `build_platform_config()`, `print_implementation_plan()` |
 | `junction/graph_generator.py` | Discovery answers → validated agent graph | `generate_agent_graph(answers, models)`, `write_agent_graph(graph, path)` |
 | `junction/graph_schema.py` + `schemas/` | JSON Schema v2.0 + safety invariants | `validate_agent_graph()`, `graph_errors()`, `validate_agent_graph_file()` |
 | `junction/models.py` | Model tier defaults and overrides | `DEFAULT_MODELS`, `resolve_models()`, `claude_code_alias()` |

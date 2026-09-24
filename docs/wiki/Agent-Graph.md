@@ -136,7 +136,7 @@ from junction import generate_agent_graph, write_agent_graph  # write validates 
 graph = generate_agent_graph({
     "domain_name": "person",
     "env_names": "dv,qc,pr",
-    "naming_pattern": "dp-{env}-{domain}-{resource-type}-{purpose}",
+    "naming_pattern": "{domain}-{env}-{resource-type}-{purpose}",
     "jira_required": True,
     "auto_fix_dv": True,
     "parallel_research": True,
