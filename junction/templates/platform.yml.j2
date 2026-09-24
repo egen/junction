@@ -25,7 +25,7 @@ environments:
 
 # ─── Compute Platform ────────────────────────────────────────────
 compute:
-  type: {{ platform.compute_type }}               # ecs_fargate | eks | lambda | ec2_asg | gke | aca
+  type: {{ platform.compute_type }}               # ecs_fargate | eks | lambda | ec2_asg | gke | cloud_run | aca
   cluster_naming: "{app}-{prefix}-{service}-cluster"
   service_naming: "{app}-{prefix}-{service}"
   health_endpoint_pattern: "/health"
