@@ -3,7 +3,7 @@
 > **The bootstrap idea in one sentence:** instead of dropping one general-purpose AI assistant into an infrastructure repo, ask a short set of *junction questions* once, then generate a **graph of specialist agents** — each with its own zone, tools, model and risk gate — plus the guardrails, knowledge base and phased build plan that keep them from drifting.
 
 This wiki documents the bootstrap layer of the
-[Junction](../../README.md) (`junction` v0.3): what the idea is, how the agent graph is shaped, how discovery works, and the production lessons built into it.
+[Junction](../../README.md) (`junction` v0.1): what the idea is, how the agent graph is shaped, how discovery works, and the production lessons built into it.
 
 ## Start here
 

@@ -9,7 +9,7 @@ End-to-end flow (``junction --discover``):
   - scaffold.py / sdk.py: write everything into the target repo
 """
 
-__version__ = "0.3.0"
+__version__ = "0.1.0"
 
 from junction.discovery import DiscoveryResult, print_implementation_plan, run_discovery  # noqa: E402
 from junction.graph_generator import generate_agent_graph, write_agent_graph  # noqa: E402

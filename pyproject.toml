@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "junction-sdk"
-version = "0.3.0"
+version = "0.1.0"
 description = "Bootstrap CLI and SDK for Junction — discovery-driven, schema-validated six-agent graphs for AI-powered IaC and SRE, scaffolded for any coding agent."
 readme = "README.md"
 license = "MIT"
