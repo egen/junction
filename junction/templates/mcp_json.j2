@@ -1,0 +1,16 @@
+{
+  "servers": {
+{% for server in enabled_servers %}
+    "{{ server }}": {
+      "command": "python",
+      "args": [".github/mcp-servers/{{ server }}/server.py"]{% if server == "cloud-logs" and platform.mcp.cloud_logs_backend == "cloudwatch" %},
+      "env": {
+        "AWS_PROFILE": "${config:aws.profile}",
+        "AWS_REGION": "${config:aws.region}"
+      }{% endif %}
+
+    }{% if not loop.last %},{% endif %}
+
+{% endfor %}
+  }
+}

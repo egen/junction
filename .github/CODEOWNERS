@@ -1,0 +1,17 @@
+# CODEOWNERS
+# Global owner — reviews all changes
+* @gagan-shangari-egenai
+
+# Agent graph schema and safety invariants — changes here affect every scaffolded repo
+junction/graph_schema.py @gagan-shangari-egenai
+junction/schemas/ @gagan-shangari-egenai
+
+# Core skills shipped by default — changes here affect all users of junction
+.github/skills/_core/ @gagan-shangari-egenai
+junction/framework/github/skills/_core/ @gagan-shangari-egenai
+
+# Deployment policies — governance changes need careful review
+.github/knowledge/deployment-policies.md @gagan-shangari-egenai
+
+# Packaging and release config
+pyproject.toml @gagan-shangari-egenai

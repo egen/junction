@@ -1,0 +1,55 @@
+[build-system]
+requires = ["setuptools>=77", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "junction-sdk"
+version = "0.3.0"
+description = "Bootstrap CLI and SDK for Junction — discovery-driven, schema-validated six-agent graphs for AI-powered IaC and SRE, scaffolded for any coding agent."
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+requires-python = ">=3.11"
+authors = [{ name = "Egen" }]
+keywords = [
+  "iac", "sre", "github-copilot", "coding-agent", "terraform",
+  "platform-engineering", "mcp", "ai-agents", "devops",
+]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Intended Audience :: Developers",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Topic :: Software Development :: Build Tools",
+  "Topic :: System :: Systems Administration",
+]
+dependencies = [
+  "click>=8.1",
+  "jinja2>=3.1",
+  "jsonschema>=4.18",
+  "pyyaml>=6.0",
+  "rich>=13.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0", "pytest-mock>=3.12", "build>=1.0"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[project.scripts]
+junction = "junction.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/egen/junction"
+Repository = "https://github.com/egen/junction"
+"Bug Tracker" = "https://github.com/egen/junction/issues"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["junction*"]
+
+[tool.setuptools.package-data]
+junction = ["templates/*", "schemas/*.json", "framework/**/*"]

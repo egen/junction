@@ -1,0 +1,218 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/egen/junction/schemas/agent-graph-2.0.json",
+  "title": "IaC + SRE agent graph",
+  "description": "agent-graph.yml v2.0: six specialist agent nodes, their edges, gates, failure policy, evals and governance.",
+  "type": "object",
+  "required": ["graph", "naming", "nodes", "edges", "error_handling", "failure_policy", "evals", "governance"],
+  "additionalProperties": false,
+  "$defs": {
+    "tier": {"enum": ["planner", "builder", "validator", "observer", "curator"]},
+    "risk_gate": {"enum": ["none", "LOW", "MEDIUM", "HIGH"]},
+    "node_name": {"enum": ["orchestrator", "iac-validator", "terraform-builder", "sre-observer", "knowledge-curator", "migration-executor"]},
+    "nonempty_string": {"type": "string", "minLength": 1},
+    "string_list": {"type": "array", "items": {"$ref": "#/$defs/nonempty_string"}, "minItems": 1},
+    "retry_policy": {
+      "type": "object",
+      "properties": {
+        "retry": {"type": "integer", "minimum": 0, "maximum": 10},
+        "backoff": {"enum": ["none", "linear", "exponential"]},
+        "fallback": {"$ref": "#/$defs/nonempty_string"}
+      },
+      "additionalProperties": false
+    }
+  },
+  "properties": {
+    "graph": {
+      "type": "object",
+      "required": ["version", "type", "description"],
+      "properties": {
+        "version": {"const": "2.0"},
+        "type": {"const": "org"},
+        "description": {"$ref": "#/$defs/nonempty_string"},
+        "domain": {"$ref": "#/$defs/nonempty_string"}
+      },
+      "additionalProperties": false
+    },
+    "naming": {
+      "type": "object",
+      "required": ["pattern", "env_values", "variable"],
+      "properties": {
+        "pattern": {"type": "string", "pattern": "\\{env\\}"},
+        "env_values": {"$ref": "#/$defs/string_list"},
+        "variable": {"$ref": "#/$defs/nonempty_string"}
+      },
+      "additionalProperties": false
+    },
+    "models": {
+      "type": "object",
+      "required": ["planner", "builder", "validator", "observer", "curator"],
+      "properties": {
+        "planner": {"$ref": "#/$defs/nonempty_string"},
+        "builder": {"$ref": "#/$defs/nonempty_string"},
+        "validator": {"$ref": "#/$defs/nonempty_string"},
+        "observer": {"$ref": "#/$defs/nonempty_string"},
+        "curator": {"$ref": "#/$defs/nonempty_string"}
+      },
+      "additionalProperties": false
+    },
+    "nodes": {
+      "type": "object",
+      "required": ["orchestrator", "iac-validator", "terraform-builder", "sre-observer", "knowledge-curator", "migration-executor"],
+      "propertyNames": {"$ref": "#/$defs/node_name"},
+      "additionalProperties": {
+        "type": "object",
+        "required": ["role", "model", "zone", "tools", "risk_gate"],
+        "properties": {
+          "role": {"$ref": "#/$defs/nonempty_string"},
+          "model": {"$ref": "#/$defs/tier"},
+          "zone": {"$ref": "#/$defs/string_list"},
+          "tools": {"$ref": "#/$defs/string_list"},
+          "risk_gate": {"$ref": "#/$defs/risk_gate"},
+          "skills": {"type": "array", "items": {"$ref": "#/$defs/nonempty_string"}}
+        },
+        "additionalProperties": false
+      }
+    },
+    "edges": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["from", "to", "trigger"],
+        "properties": {
+          "from": {"$ref": "#/$defs/node_name"},
+          "to": {"$ref": "#/$defs/node_name"},
+          "trigger": {"$ref": "#/$defs/nonempty_string"},
+          "gate": {"$ref": "#/$defs/nonempty_string"},
+          "max_cycles": {"type": "integer", "minimum": 1, "maximum": 10}
+        },
+        "additionalProperties": false
+      }
+    },
+    "parallel": {
+      "type": "object",
+      "required": ["fan_out_in"],
+      "properties": {
+        "fan_out_in": {
+          "type": "object",
+          "required": ["pattern"],
+          "properties": {
+            "pattern": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "object",
+                "required": ["phase"],
+                "properties": {
+                  "phase": {"enum": ["research", "synthesize", "act"]},
+                  "parallel": {"type": "boolean"},
+                  "nodes": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "required": ["agent", "task"],
+                      "properties": {"agent": {"$ref": "#/$defs/node_name"}, "task": {"$ref": "#/$defs/nonempty_string"}},
+                      "additionalProperties": false
+                    }
+                  },
+                  "timeout": {"type": "string", "pattern": "^[0-9]+(ms|s|m)$"},
+                  "fail_strategy": {"enum": ["partial_ok", "all_or_nothing"]},
+                  "agent": {"$ref": "#/$defs/node_name"},
+                  "action": {"$ref": "#/$defs/nonempty_string"},
+                  "gate": {"$ref": "#/$defs/node_name"}
+                },
+                "additionalProperties": false
+              }
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "error_handling": {
+      "type": "object",
+      "required": ["decontamination"],
+      "properties": {
+        "decontamination": {
+          "type": "object",
+          "required": ["on_node_failure", "on_retry", "max_error_chain", "after_max"],
+          "properties": {
+            "on_node_failure": {"$ref": "#/$defs/nonempty_string"},
+            "on_retry": {"$ref": "#/$defs/nonempty_string"},
+            "max_error_chain": {"type": "integer", "minimum": 1, "maximum": 10},
+            "after_max": {"$ref": "#/$defs/nonempty_string"}
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "failure_policy": {
+      "type": "object",
+      "required": ["default", "per_node"],
+      "properties": {
+        "default": {"$ref": "#/$defs/retry_policy"},
+        "per_node": {
+          "type": "object",
+          "propertyNames": {"$ref": "#/$defs/node_name"},
+          "additionalProperties": {"$ref": "#/$defs/retry_policy"}
+        }
+      },
+      "additionalProperties": false
+    },
+    "evals": {
+      "type": "object",
+      "required": ["token_budget", "costly_patterns"],
+      "properties": {
+        "token_budget": {
+          "type": "object",
+          "required": ["per_node_warn", "per_node_hard", "per_work_graph_hard"],
+          "properties": {
+            "per_node_warn": {"type": "integer", "minimum": 1},
+            "per_node_hard": {"type": "integer", "minimum": 1},
+            "per_work_graph_hard": {"type": "integer", "minimum": 1}
+          },
+          "additionalProperties": false
+        },
+        "costly_patterns": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["pattern", "severity"],
+            "properties": {
+              "pattern": {"$ref": "#/$defs/nonempty_string"},
+              "severity": {"enum": ["LOW", "MEDIUM", "HIGH"]}
+            },
+            "additionalProperties": false
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "governance": {
+      "type": "object",
+      "required": ["jira_gate", "knowledge_scope", "coding_standards"],
+      "properties": {
+        "jira_gate": {
+          "type": "object",
+          "required": ["enabled", "report_only_on_confirmed"],
+          "properties": {"enabled": {"type": "boolean"}, "report_only_on_confirmed": {"type": "boolean"}},
+          "additionalProperties": false
+        },
+        "knowledge_scope": {
+          "type": "object",
+          "required": ["belongs"],
+          "properties": {"belongs": {"$ref": "#/$defs/string_list"}},
+          "additionalProperties": false
+        },
+        "coding_standards": {
+          "type": "object",
+          "additionalProperties": {"$ref": "#/$defs/string_list"}
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}
