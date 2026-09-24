@@ -13,6 +13,14 @@ from junction.scaffold import FRAMEWORK_FILES, framework_source
 ROOT = Path(__file__).resolve().parent.parent
 
 
+def _flat(text: str) -> str:
+    """Collapse Rich's word-wrap so phrase assertions don't depend on the
+    console width CliRunner happens to detect (80 cols with no TTY in CI,
+    vs. whatever a local shell's COLUMNS reports — the same message can wrap
+    a multi-word phrase across lines in one and not the other)."""
+    return " ".join(text.split())
+
+
 def test_packaged_framework_matches_repo():
     for rel in FRAMEWORK_FILES:
         assert framework_source(rel).read_bytes() == (ROOT / rel).read_bytes(), (
@@ -117,8 +125,9 @@ def test_invalid_domain_flag_fails_clearly_not_a_traceback(tmp_path):
         "--target", str(tmp_path), "--yes",
     ])
     assert result.exit_code == 1
-    assert "Invalid answer" in result.output
-    assert "lowercase letters" in result.output
+    output = _flat(result.output)
+    assert "Invalid answer" in output
+    assert "lowercase letters" in output
 
 
 def test_services_flag_rejects_non_slug_names():
@@ -127,7 +136,7 @@ def test_services_flag_rejects_non_slug_names():
         "--target", "/tmp/should-not-be-created", "--yes",
     ])
     assert result.exit_code != 0
-    assert "invalid service name" in result.output
+    assert "invalid service name" in _flat(result.output)
 
 
 def test_discover_with_agent_missing_target_fails_clearly(tmp_path):
@@ -135,7 +144,7 @@ def test_discover_with_agent_missing_target_fails_clearly(tmp_path):
         "--discover-with-agent", "--defaults", "--target", str(tmp_path / "nope"), "--yes",
     ])
     assert result.exit_code == 1
-    assert "does not exist" in result.output
+    assert "does not exist" in _flat(result.output)
 
 
 def test_sdk_from_discovery(tmp_path):
