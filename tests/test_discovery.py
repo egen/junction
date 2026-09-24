@@ -98,7 +98,10 @@ def test_load_answers_yaml(tmp_path):
 def test_build_platform_config_risk_tiers():
     cfg = build_platform_config({**default_answers(), "env_names": "dev,stage,uat,prod", "cloud": "gcp"})
     assert [e.risk_tier for e in cfg.environments] == ["LOW", "MEDIUM", "MEDIUM", "HIGH"]
-    assert cfg.compute_type == "gke"
+    # cloud_run, not gke: generate_gcp_terraform() only emits Cloud Run today, so
+    # the default must match what's actually generated (regression test for the
+    # platform.yml/infra split-brain this default used to cause).
+    assert cfg.compute_type == "cloud_run"
 
 
 def test_example_answers_file_answers_every_question():

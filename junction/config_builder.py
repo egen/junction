@@ -24,7 +24,7 @@ RISK_TIERS = ["LOW", "MEDIUM", "HIGH"]
 
 CLOUD_PROVIDERS = ["aws", "gcp", "azure", "multi"]
 IAC_TOOLS = ["terraform", "opentofu", "pulumi", "cdk", "cloudformation"]
-COMPUTE_TYPES = ["ecs_fargate", "eks", "lambda", "ec2_asg", "gke", "aca"]
+COMPUTE_TYPES = ["ecs_fargate", "eks", "lambda", "ec2_asg", "gke", "cloud_run", "aca"]
 CICD_TYPES = ["codebuild", "github_actions", "gitlab_ci", "spacelift", "atlantis"]
 AGENT_CHOICES = ["copilot", "cursor", "claude-code", "continue", "agnostic"]
 
@@ -275,7 +275,10 @@ def cloud_defaults(cloud: str) -> dict:
     }.get(cloud, McpConfig())
     return {
         "mcp": mcp,
-        "compute_type": "ecs_fargate" if cloud == "aws" else "gke" if cloud == "gcp" else "aca",
+        # cloud_run, not gke: generate_gcp_terraform() in terraform_generator.py only
+        # emits Cloud Run resources today — a gke default here would make platform.yml
+        # claim a compute type the generated infra/ never actually builds.
+        "compute_type": "ecs_fargate" if cloud == "aws" else "cloud_run" if cloud == "gcp" else "aca",
         "container_registry": "ecr" if cloud == "aws" else "gcr" if cloud == "gcp" else "acr",
         "cicd_type": "codebuild" if cloud == "aws" else "github_actions",
     }
