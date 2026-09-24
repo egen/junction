@@ -42,6 +42,7 @@ Reproduce it locally with `./scripts/local-e2e-check.sh -d orders -p <your-gcp-p
 
 | # | Item | Resolution |
 |---|---|---|
+| 18 | Adoption friction: every field had to be answered by hand, one at a time, with no way to shortcut it from repo context | Two additions, both opt-in: a `use_case_profile` question (web/API, data pipeline, event-driven, ML platform, internal tooling, or custom) presets the `data_stores`/`secrets` defaults, so accepting the rest takes near-zero input; `--discover-with-agent` shells out to the local `claude` CLI (headless, read-only — `Read`/`Glob`/`Grep` only) to inspect an existing `--target` repo and propose answers for what it can infer, merged in exactly like an `--answers` file (explicit flags still win). See [Discovery Engine](Discovery-Engine.md#the-17-junction-questions) and [Discovery Engine § Letting your local agent answer for you](Discovery-Engine.md#letting-your-local-agent-answer-for-you) |
 | 12 | `platform.yml.j2` hardcoded the AWS ECR registry URI regardless of `container_registry` | `REGISTRY_URI_PATTERNS` in `scaffold.py`, keyed by registry type |
 | 13 | `cicd.log_group` was always the AWS CodeBuild path, even for `github_actions`/etc. | `CICD_LOG_GROUP_PATTERNS`, with a plain-language fallback for CI systems with no log-group concept |
 | 14 | `observability` group/index patterns hardcoded `ecs/`/`ecs-` regardless of compute type | Dropped the ECS-specific prefix; the pattern is now compute-agnostic |

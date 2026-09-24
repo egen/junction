@@ -1,9 +1,11 @@
 from pathlib import Path
+from unittest.mock import patch
 
 import yaml
 from click.testing import CliRunner
 
 from junction import Bootstrap, Platform, __version__
+from junction.agent_discovery import AgentDiscoveryResult
 from junction.cli import main
 from junction.graph_generator import NODE_ORDER
 from junction.scaffold import FRAMEWORK_FILES, framework_source
@@ -74,6 +76,44 @@ def test_cli_rejects_invalid_graph(tmp_path, graph):
     bad.write_text(yaml.safe_dump(graph))
     result = CliRunner().invoke(main, ["--validate-graph", str(bad)])
     assert result.exit_code == 1 and "risk_gate must be HIGH" in result.output
+
+
+def test_discover_with_agent_fills_gaps_but_flags_win(tmp_path):
+    """The agent's proposal fills questions the user didn't answer, but an
+    explicit --domain always wins over what the agent proposed for the same
+    field — and target must already exist (this inspects a real repo)."""
+    target = tmp_path / "repo"
+    target.mkdir()
+    (target / "requirements.txt").write_text("fastapi\n")
+
+    proposed = AgentDiscoveryResult(
+        success=True,
+        answers={"domain_name": "agent-guessed-name", "has_msk": False, "cloud": "gcp"},
+        message="Agent proposed 3 of 17 answers",
+    )
+    with patch("junction.agent_discovery.propose_answers_with_agent", return_value=proposed) as mocked:
+        result = CliRunner().invoke(main, [
+            "--discover-with-agent", "--defaults", "--domain", "payments",
+            "--target", str(target), "--yes",
+        ])
+
+    assert result.exit_code == 0, result.output
+    assert mocked.call_args[0][0] == target.resolve()
+    assert "(agent)" in result.output
+    graph = yaml.safe_load((target / ".github/config/agent-graph.yml").read_text())
+    # --domain (a real flag) beats the agent's guess for the same field
+    assert graph["graph"]["domain"] == "payments"
+    answers = yaml.safe_load((target / ".github/config/discovery-answers.yml").read_text())
+    assert answers["has_msk"] is False  # not overridden anywhere else, so the agent's answer sticks
+    assert answers["cloud"] == "gcp"
+
+
+def test_discover_with_agent_missing_target_fails_clearly(tmp_path):
+    result = CliRunner().invoke(main, [
+        "--discover-with-agent", "--defaults", "--target", str(tmp_path / "nope"), "--yes",
+    ])
+    assert result.exit_code == 1
+    assert "does not exist" in result.output
 
 
 def test_sdk_from_discovery(tmp_path):

@@ -2,6 +2,10 @@
 #   junction --answers examples/discovery-answers.example.yml --target ./payments-infra --yes
 # Any question left out is asked interactively (or defaulted with --defaults).
 
+# Phase 0 · use-case profile (presets data-store/secrets defaults; every one is
+# still overridden explicitly below, so the preset itself doesn't matter here)
+use_case_profile: Event-driven microservices
+
 # Phase 0 · platform
 agent: claude-code            # copilot | claude-code | cursor | continue | agnostic
 cloud: aws

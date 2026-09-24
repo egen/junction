@@ -4,16 +4,17 @@ import pytest
 from rich.console import Console
 
 from junction.discovery import (
-    all_questions, build_platform_config, default_answers, load_answers, normalize_answer, run_discovery,
+    USE_CASE_PROFILES, all_questions, build_platform_config, default_answers, load_answers, normalize_answer,
+    run_discovery,
 )
 
 QUIET = Console(file=io.StringIO())
 
 
-def test_questions_are_unique_and_start_with_platform():
+def test_questions_are_unique_and_start_with_profile():
     ids = [q["id"] for q in all_questions()]
-    assert ids[:3] == ["agent", "cloud", "iac_tool"]
-    assert len(ids) == len(set(ids)) == 16
+    assert ids[:4] == ["use_case_profile", "agent", "cloud", "iac_tool"]
+    assert len(ids) == len(set(ids)) == 17
 
 
 def test_defaults_run_is_non_interactive():
@@ -32,6 +33,43 @@ def test_dead_and_single_cloud_questions_were_dropped():
         "env_count", "service_count", "shared_services", "resource_type_tokens",
         "module_registry", "msk_cluster_shared", "kms_strategy", "nr_license_strategy",
     })
+
+
+def test_use_case_profile_presets_data_store_defaults():
+    """A profile answer changes the *default* shown for later questions,
+    without hiding or skipping them — they can still be overridden."""
+    result = run_discovery(
+        prefilled={"domain_name": "orders", "use_case_profile": "Data pipeline / ETL"},
+        use_defaults=True, out=QUIET,
+    )
+    assert result.answers["has_rds"] is False
+    assert result.answers["has_msk"] is True
+    assert result.answers["has_s3"] is True
+    assert result.answers["secret_strategy"].startswith("Both")
+
+    # An explicitly preset answer still wins over the profile's suggestion.
+    result2 = run_discovery(
+        prefilled={"use_case_profile": "Data pipeline / ETL", "has_rds": "yes"},
+        use_defaults=True, out=QUIET,
+    )
+    assert result2.answers["has_rds"] is True
+
+
+def test_use_case_profile_custom_applies_no_overrides():
+    result = run_discovery(prefilled={"use_case_profile": "Not sure yet / custom"}, use_defaults=True, out=QUIET)
+    assert result.answers["has_rds"] is True and result.answers["has_msk"] is True and result.answers["has_s3"] is True
+
+
+def test_every_profile_only_overrides_real_questions():
+    ids = {q["id"] for q in all_questions()}
+    for profile, overrides in USE_CASE_PROFILES.items():
+        assert set(overrides) <= ids, f"{profile!r} overrides an id that isn't a real question"
+
+
+def test_default_answers_seed_applies_profile():
+    answers = default_answers(seed={"use_case_profile": "Web / API service"})
+    assert answers["has_msk"] is False
+    assert answers["has_rds"] is True
 
 
 def test_non_question_keys_pass_through():

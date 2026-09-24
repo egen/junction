@@ -41,6 +41,27 @@ console = Console()
 # ─── Junction Questions (reduce drift by asking at the right time) ────────────
 
 PHASE_QUESTIONS = {
+    "profile": [
+        {
+            "id": "use_case_profile",
+            "question": "What are you building?",
+            "type": "choice",
+            "options": [
+                "Web / API service",
+                "Data pipeline / ETL",
+                "Event-driven microservices",
+                "ML / AI platform",
+                "Internal platform / developer tooling",
+                "Not sure yet / custom",
+            ],
+            "default": "Web / API service",
+            "rationale": (
+                "Presets sensible answers for the data-store and secrets questions below, "
+                "so accepting the suggested default for the rest of discovery takes almost "
+                "no input. Every preset can still be changed question by question."
+            ),
+        },
+    ],
     "platform": [
         {
             "id": "agent",
@@ -181,6 +202,39 @@ PHASE_QUESTIONS = {
 }
 
 
+# ─── Use-case profiles ────────────────────────────────────────────────────────
+#
+# One upfront answer presets the data-store/secrets questions so accepting the
+# default for everything after it takes near-zero input — see _default_for().
+# Every preset can still be overridden question by question; "Not sure yet /
+# custom" applies no overrides at all, falling back to each question's own
+# hardcoded default (relational DB + streaming + object storage + IAM auth).
+
+USE_CASE_PROFILES: dict[str, dict[str, Any]] = {
+    "Web / API service": {
+        "has_rds": True, "has_msk": False, "has_s3": True,
+        "secret_strategy": "IAM auth (no passwords, token-based)",
+    },
+    "Data pipeline / ETL": {
+        "has_rds": False, "has_msk": True, "has_s3": True,
+        "secret_strategy": "Both (IAM where possible, secrets manager for external systems)",
+    },
+    "Event-driven microservices": {
+        "has_rds": True, "has_msk": True, "has_s3": False,
+        "secret_strategy": "IAM auth (no passwords, token-based)",
+    },
+    "ML / AI platform": {
+        "has_rds": True, "has_msk": False, "has_s3": True,
+        "secret_strategy": "Both (IAM where possible, secrets manager for external systems)",
+    },
+    "Internal platform / developer tooling": {
+        "has_rds": True, "has_msk": False, "has_s3": False,
+        "secret_strategy": "IAM auth (no passwords, token-based)",
+    },
+    "Not sure yet / custom": {},
+}
+
+
 # ─── Phased Implementation Plan ──────────────────────────────────────────────
 
 IMPLEMENTATION_PHASES = [
@@ -190,7 +244,7 @@ IMPLEMENTATION_PHASES = [
         "description": "Ask questions, resolve naming, confirm architecture",
         "outputs": ["platform.yml", "agent-graph.yml", "naming-standard.md"],
         "gate": "User confirms design decisions",
-        "junction_questions": ["platform", "discovery", "naming"],
+        "junction_questions": ["profile", "platform", "discovery", "naming"],
     },
     {
         "phase": 1,
@@ -263,13 +317,19 @@ def all_questions() -> list[dict]:
     return ordered
 
 
-def default_answers() -> dict[str, Any]:
-    """The answer every question takes when accepted with its default."""
-    answers: dict[str, Any] = {}
+def default_answers(seed: Optional[dict[str, Any]] = None) -> dict[str, Any]:
+    """The answer every question takes when accepted with its default.
+
+    ``seed`` pre-fills specific answers (e.g. ``use_case_profile``) before the
+    rest are computed, so profile-driven defaults (see ``_default_for``) take
+    effect even outside the interactive ``run_discovery`` flow.
+    """
+    answers: dict[str, Any] = dict(seed or {})
     for q in all_questions():
         if q.get("only_if") and not answers.get(q["only_if"]):
             continue
-        answers[q["id"]] = _default_for(q)
+        if q["id"] not in answers:
+            answers[q["id"]] = _default_for(q, answers)
     return answers
 
 
@@ -277,15 +337,19 @@ def run_discovery(
     prefilled: Optional[dict[str, Any]] = None,
     use_defaults: bool = False,
     out: Optional[Console] = None,
+    agent_answer_keys: Optional[set[str]] = None,
 ) -> DiscoveryResult:
     """Ask the junction questions phase by phase.
 
     ``prefilled`` answers (CLI flags or an answers file) are used as-is and not
     asked. With ``use_defaults`` every remaining question takes its default, so
-    the run is fully non-interactive.
+    the run is fully non-interactive. ``agent_answer_keys`` marks which
+    ``prefilled`` keys came from ``--discover-with-agent`` rather than an
+    explicit flag/answers file, purely so the printed decision log can say so.
     """
     out = out or console
     prefilled = dict(prefilled or {})
+    agent_answer_keys = agent_answer_keys or set()
     result = DiscoveryResult()
     # Keys that are not questions (environments, models, …) pass straight through
     known = {q["id"] for q in all_questions()}
@@ -311,12 +375,13 @@ def run_discovery(
                 continue
             if q["id"] in prefilled:
                 answer = normalize_answer(q, prefilled[q["id"]])
-                out.print(f"  [green]✓[/] {q['question']} [cyan]{_show(answer)}[/] [dim](preset)[/]")
+                tag = "agent" if q["id"] in agent_answer_keys else "preset"
+                out.print(f"  [green]✓[/] {q['question']} [cyan]{_show(answer)}[/] [dim]({tag})[/]")
             elif use_defaults:
-                answer = _default_for(q)
+                answer = _default_for(q, result.answers)
                 out.print(f"  [green]✓[/] {q['question']} [cyan]{_show(answer)}[/] [dim](default)[/]")
             else:
-                answer = _ask_question(q, out)
+                answer = _ask_question(q, out, result.answers)
             result.answers[q["id"]] = answer
         out.print(f"  [green]Gate:[/] {phase['gate']}")
 
@@ -359,7 +424,11 @@ def normalize_answer(q: dict, value: Any) -> Any:
     return "" if value is None else str(value)
 
 
-def _default_for(q: dict) -> Any:
+def _default_for(q: dict, answers: Optional[dict[str, Any]] = None) -> Any:
+    profile = (answers or {}).get("use_case_profile")
+    overrides = USE_CASE_PROFILES.get(profile, {})
+    if q["id"] in overrides:
+        return overrides[q["id"]]
     if q["type"] == "choice":
         return q.get("default", q["options"][0])
     if q["type"] == "confirm":
@@ -375,10 +444,10 @@ def _show(value: Any) -> str:
     return str(value) if value != "" else "—"
 
 
-def _ask_question(q: dict, out: Console) -> Any:
+def _ask_question(q: dict, out: Console, answers: Optional[dict[str, Any]] = None) -> Any:
     """Ask a single question with rationale shown."""
     out.print(f"  [dim italic]{q['rationale']}[/]")
-    default = _default_for(q)
+    default = _default_for(q, answers)
 
     if q["type"] == "confirm":
         return Confirm.ask(f"  {q['question']}", default=default, console=out)
@@ -498,7 +567,12 @@ def render_implementation_plan(answers: dict[str, Any], graph: dict) -> str:
         f"| {p['phase']} | **{p['name']}** | {p['description']} | {', '.join(p['outputs'])} | {p['gate']} |"
         for p in IMPLEMENTATION_PHASES
     )
-    stores = [label for key, label in (("has_rds", "Aurora"), ("has_msk", "MSK"), ("has_s3", "S3")) if answers.get(key)]
+    stores = [
+        label for key, label in (
+            ("has_rds", "relational database"), ("has_msk", "streaming"), ("has_s3", "object storage"),
+        )
+        if answers.get(key)
+    ]
     return f"""# Implementation Plan — {graph["graph"]["description"]}
 
 Generated by `junction`. Each phase ends at a gate; do not start the

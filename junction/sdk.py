@@ -162,7 +162,7 @@ class Bootstrap:
         from junction.discovery import build_platform_config, default_answers
         from junction.graph_generator import generate_agent_graph
 
-        full = {**default_answers(), **answers}
+        full = {**default_answers(seed=answers), **answers}
         graph = generate_agent_graph(full, models=models)
         platform = Platform(build_platform_config(full))
         return cls(platform, target_dir=target_dir, overwrite=overwrite, graph=graph, answers=full)

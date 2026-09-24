@@ -23,6 +23,7 @@ Usage (end-to-end discovery → six-agent graph → scaffold):
     junction --discover --defaults --agent claude-code \\
         --domain payments --target ./my-infra-repo --yes                # no prompts
     junction --answers discovery-answers.yml --target ./x  # replay
+    junction --discover-with-agent --target ./my-infra-repo # agent proposes answers first
 
 Validate a graph file:
     junction --validate-graph .github/config/agent-graph.yml
@@ -165,6 +166,20 @@ console = Console()
     help="Don't prompt to create the target directory. Existing files still need --overwrite.",
 )
 @click.option(
+    "--discover-with-agent",
+    "discover_with_agent",
+    is_flag=True,
+    default=False,
+    help=(
+        "EXPERIMENTAL, opt-in: before asking the junction questions, have your local "
+        "coding-agent CLI (claude, headless, read-only — no Write/Edit/Bash tools) inspect "
+        "the --target repo and propose answers for as many questions as it can infer, so "
+        "there's less to answer by hand. Independent of --agent (the scaffold output "
+        "format); works the same whichever one you pick. Requires the `claude` binary on "
+        "PATH, real API usage, and an existing --target repo to inspect. Implies --discover."
+    ),
+)
+@click.option(
     "--generate-iac-with-agent",
     "generate_iac_with_agent",
     is_flag=True,
@@ -194,6 +209,7 @@ def main(
     model_overrides: tuple[str, ...],
     graph_file: Optional[Path],
     assume_yes: bool,
+    discover_with_agent: bool,
     generate_iac_with_agent: bool,
 ) -> None:
     """
@@ -216,12 +232,13 @@ def main(
 
     graph = None
     answers = None
-    discover = discover or answers_file is not None or use_defaults
+    discover = discover or answers_file is not None or use_defaults or discover_with_agent
 
     # ── Build PlatformConfig ─────────────────────────────────────────
     if discover:
         platform_cfg, graph, answers = _discovery_build(
             answers_file, use_defaults, agent, cloud, iac_tool, domain, services_arg, models, config_file,
+            target_dir=target_dir, discover_with_agent=discover_with_agent,
         )
     elif config_file:
         # Flag-driven: load from pre-filled platform.yml
@@ -337,6 +354,8 @@ def _discovery_build(
     services_arg: Optional[str],
     models: dict[str, str],
     config_file: Optional[Path],
+    target_dir: Path = Path("."),
+    discover_with_agent: bool = False,
 ) -> tuple[PlatformConfig, dict, dict]:
     """Discovery answers → (PlatformConfig, validated agent graph, answers)."""
     prefilled: dict = {}
@@ -361,7 +380,13 @@ def _discovery_build(
         prefilled.setdefault("iac_tool", base.iac_tool)
         prefilled.setdefault("env_names", ",".join(e.name for e in base.environments))
 
-    result = run_discovery(prefilled=prefilled, use_defaults=use_defaults, out=console)
+    agent_answer_keys: set = set()
+    if discover_with_agent:
+        agent_answer_keys = _run_discover_with_agent(target_dir.resolve(), prefilled)
+
+    result = run_discovery(
+        prefilled=prefilled, use_defaults=use_defaults, out=console, agent_answer_keys=agent_answer_keys,
+    )
     answers = result.answers
     try:
         graph = generate_agent_graph(answers, models=models)
@@ -375,6 +400,42 @@ def _discovery_build(
     else:
         platform_cfg = build_platform_config(answers)
     return platform_cfg, graph, answers
+
+
+def _run_discover_with_agent(target: Path, prefilled: dict) -> set:
+    """Have the local claude CLI inspect ``target`` and fill gaps in
+    ``prefilled`` (mutated in place) with what it can infer. Explicit flags
+    and an --answers file always win — the agent only fills what neither
+    already set. Returns the set of keys the agent actually contributed, for
+    the "(agent)" tag in the printed decision log."""
+    from junction.agent_discovery import propose_answers_with_agent
+
+    if not target.is_dir():
+        console.print(
+            f"[red]--discover-with-agent needs an existing --target repo to inspect "
+            f"(got {target}, which does not exist).[/red]"
+        )
+        sys.exit(1)
+
+    console.print(
+        f"\n[bold]Asking your local coding agent to look at {target} …[/bold] "
+        "[dim](read-only: Read/Glob/Grep, no writes; calls the real `claude` CLI)[/dim]"
+    )
+    result = propose_answers_with_agent(target)
+    if not result.success:
+        console.print(f"[yellow]⚠ {result.message} — falling back to asking every question.[/yellow]")
+        return set()
+
+    console.print(f"[green]✓[/green] {result.message}")
+    for warning in result.warnings:
+        console.print(f"  [dim yellow]- {warning}[/dim yellow]")
+
+    agent_keys = set()
+    for key, value in result.answers.items():
+        if key not in prefilled:
+            prefilled[key] = value
+            agent_keys.add(key)
+    return agent_keys
 
 
 def _validate_graph_command(graph_file: Path) -> None:

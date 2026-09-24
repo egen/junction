@@ -15,7 +15,7 @@ flowchart LR
 
 | # | Phase | What happens | Outputs | Gate | Questions asked |
 |---|---|---|---|---|---|
-| 0 | **Discovery + Design** | Ask questions, lock naming, confirm the architecture | `platform.yml`, `agent-graph.yml`, `naming-standard.md` | User confirms the design decisions | discovery, naming |
+| 0 | **Discovery + Design** | Ask questions, lock naming, confirm the architecture | `platform.yml`, `agent-graph.yml`, `naming-standard.md` | User confirms the design decisions | profile, platform, discovery, naming |
 | 1 | **Scaffold Agent Graph** | Create agents, skills, instructions and knowledge structure | 6 agents, 8 skills, 3 instructions, OKF knowledge dirs | Agent graph config passes schema validation | agent_graph |
 | 2 | **Build Store Layer** | Stateful resources (managed database, streaming, object storage) with encryption at rest | `store-*.tf` (one per selected data store) | `terraform validate` passes | data_stores, secrets |
 | 3 | **Build Platform Layer** | Compute cluster/services (`for_each`, never `count`), IAM, load balancing, log groups | `platform-*.tf` (compute, network, encryption keys) | Module interface validation: modules cloned and outputs checked | — |

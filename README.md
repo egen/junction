@@ -58,13 +58,16 @@ This installs the `junction` command (the PyPI distribution is named `junction-s
 ## Quickstart
 
 ```bash
-# End-to-end, interactive: 16 junction questions, phase by phase
+# End-to-end, interactive: 17 junction questions, phase by phase
 junction --discover --target ./my-infra-repo
 
 # End-to-end, no prompts (CI or a demo): defaults for everything not preset
 junction --discover --defaults \
   --agent claude-code --domain payments \
   --target ./my-infra-repo --yes
+
+# Let your local coding agent look at an existing repo and propose answers first
+junction --discover-with-agent --agent claude-code --target ./existing-repo
 
 # Replay a saved answers file (every run writes one)
 junction --answers .github/config/discovery-answers.yml --target ./another-repo
@@ -84,6 +87,7 @@ The run prints every decision, the phased plan, and the validated agent graph. T
 | `--discover` | Run the discovery engine end to end: answers → agent graph → scaffold | off |
 | `--answers FILE` | YAML/JSON answers to preset (implies `--discover`). Unanswered questions are asked | none |
 | `--defaults` | Take the default for every question not preset (implies `--discover`) | off |
+| `--discover-with-agent` | Experimental: before asking, have your local `claude` CLI (headless, read-only) inspect `--target` and propose answers for what it can infer, so there's less to answer by hand. Requires the `claude` binary on PATH and an existing `--target` repo. Implies `--discover` | off |
 | `--domain NAME` | Business domain used in resource names (presets `domain_name`) | prompted |
 | `--services a,b,...` | Comma-separated service names to generate Terraform for (GCP only). Default: one service named after `--domain` | one service |
 | `--model TIER=MODEL` | Override a model tier (`planner`, `builder`, `validator`, `observer`, `curator`). Repeatable | see table |

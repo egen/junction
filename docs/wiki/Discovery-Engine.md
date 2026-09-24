@@ -12,6 +12,7 @@ From the CLI, end to end (answers → graph → six agent files):
 junction --discover --target ./repo                        # interactive
 junction --discover --defaults --domain payments --target ./repo --yes
 junction --answers discovery-answers.yml --target ./repo   # preset answers; the rest are asked
+junction --discover-with-agent --target ./repo             # your local agent proposes answers first
 ```
 
 From Python:
@@ -29,7 +30,7 @@ result.answers                     # dict of question id → answer
 
 Question types: `confirm` (yes/no), `int`, `choice` (numbered options) and `text` (with examples).
 
-## The 16 junction questions
+## The 17 junction questions
 
 Every question below is actually consumed by `graph_generator.py` or `terraform_generator.py` —
 nothing here just decorates the run. Earlier versions asked 8 more (environment *count* alongside
@@ -37,6 +38,12 @@ environment *names*, an ECS-specific service count, a Docker-image-sharing quest
 naming/module-registry questions, a shared-vs-dedicated MSK follow-up, a KMS strategy question, and
 a New-Relic-only license question) that never fed any generator and only made sense on one cloud.
 They were dropped: fewer questions, faster to adopt, no single-cloud assumptions baked in.
+
+### Phase 0 · `profile`: what are you building?
+
+| Id | Question | Why it matters |
+|---|---|---|
+| `use_case_profile` | What are you building? (web/API service, data pipeline/ETL, event-driven microservices, ML/AI platform, internal platform, or not sure yet) | Presets the *defaults* for the `data_stores` and `secrets` questions below (see `USE_CASE_PROFILES` in `discovery.py`) — every question is still asked and still overridable, but accepting the suggested default for the rest of the run now takes almost no thought. "Not sure yet / custom" applies no overrides. |
 
 ### Phase 0 · `platform`: which toolchain?
 
@@ -97,6 +104,28 @@ require a specific cloud, compute type, or observability vendor to be useful.
 ## Answers files and replay
 
 Every discovery run writes `.github/config/discovery-answers.yml` into the target. Pass it back with `--answers` to reproduce the same graph, for example in CI or for another coding agent (`--agent` overrides the saved value). Values are type-checked: `yes`/`no` for confirms, integers, and a unique prefix or substring of a choice (`naming_pattern: recommended`). A bad value stops the run with a clear error. See [`examples/discovery-answers.example.yml`](../../examples/discovery-answers.example.yml).
+
+## Letting your local agent answer for you
+
+`--discover-with-agent` (implies `--discover`) shells out to the `claude` CLI in headless mode
+(`claude -p`), with only `Read`/`Glob`/`Grep` — no `Write`/`Edit`/`Bash` — so it can inspect the
+`--target` repo (package manifests, Dockerfiles, existing IaC, README, CI config, git remote) but
+never touches the filesystem itself. It returns its answers as one fenced YAML block; `junction`
+(`junction/agent_discovery.py`) parses and type-checks each field against the real question
+catalog, then merges the result in exactly like an `--answers` file — explicit flags (`--agent`,
+`--domain`, …) and an `--answers` file both still win over anything the agent proposed for the same
+field. Unanswered questions are still asked normally (or defaulted, with `--defaults`); the printed
+decision log tags each one `(agent)` so it's clear which came from inspection versus a preset or a
+default.
+
+```bash
+junction --discover-with-agent --agent claude-code --target ./existing-repo
+```
+
+This is independent of `--agent` (which output format to scaffold) — it always drives `claude`
+specifically, since it's the only coding-agent CLI with a non-interactive mode today. If `claude`
+isn't installed, or the repo doesn't parse into a usable answer set, it fails clearly and discovery
+falls back to asking every question normally rather than blocking the run.
 
 ## Relationship to the setup wizard
 
